@@ -11,8 +11,6 @@
     cardPtr  DW 0
     markPtr  DW 0
     calledNum DB 0
-
-    ; Seed for random   incremented each call to avoid repeats
     seed     DW 1
 
     msgP1     DB "== PLAYER 1 CARD ==",13,10,"$"
@@ -27,14 +25,13 @@
 
 ; PROC: GetRandom
 ; Returns a pseudo-random number in AX (1 to 75)
-; ============================================================
 GetRandom PROC
     PUSH BX
     PUSH DX
 
     ; Mix timer with seed
     MOV AH, 00H
-    INT 1AH                ; CX:DX = timer ticks
+    INT 1AH               
 
     MOV AX, seed
     ADD AX, DX             ; add timer low word
@@ -45,9 +42,9 @@ GetRandom PROC
     ; AX mod 75 + 1
     XOR DX, DX
     MOV BX, 75
-    DIV BX                 ; DX = 0..74
+    DIV BX                
     INC DX
-    MOV AX, DX             ; AX = 1..75
+    MOV AX, DX            
 
     POP DX
     POP BX
@@ -71,12 +68,10 @@ GENNEXT:
     CMP BX, 25
     JGE GENDONE
 
-    CALL GetRandom         ; AX = random 1-75
-    MOV DL, AL             ; DL = candidate
-
-    ; Uniqueness scan: check SI[0..BX-1]
+    CALL GetRandom        
+    MOV DL, AL             
     PUSH BX
-    MOV CX, BX             ; CX = cells filled so far
+    MOV CX, BX             
     MOV BX, 0
 
     CMP CX, 0
