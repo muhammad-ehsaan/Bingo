@@ -1,6 +1,3 @@
-; ============================================================
-; DATA SEGMENT  [ Muhammad Ehsan - Member 1 ]
-; ============================================================
 .DATA
     card1    DB 25 DUP(0)
     card2    DB 25 DUP(0)
@@ -100,5 +97,62 @@ GENDONE:
     POP CX
     POP BX
     POP AX
+
+
+
+.model small
+.stack 200h
+
+; ============================================================
+; UPDATED DATA SEGMENT  
+; ============================================================
+.data
+
+card1    db 25 dup(0)       ; Player 1 card 5x5 flat
+card2    db 25 dup(0)       ; Player 2 card 5x5 flat
+mark1    db 25 dup(0)       ; Player 1 marks (0=no 1=yes)
+mark2    db 25 dup(0)       ; Player 2 marks (0=no 1=yes)
+
+; Pool used for shuffle (numbers 1 to 25)
+pool     db 1,2,3,4,5,6,7,8,9,10
+         db 11,12,13,14,15,16,17,18,19,20
+         db 21,22,23,24,25
+
+seed     dw 1              ; random seed
+num      db 0              ; current picked number
+turn     db 1              ; 1=P1 turn, 2=P2 turn
+w1       db 0              ; P1 win flag
+w2       db 0              ; P2 win flag
+temp     db 0              ; temp variable
+
+; ============================================================
+; UPDATED  PROC: GetRandom
+; ============================================================
+GetRandom proc
+    push bx
+    push cx
+    push dx
+
+    mov ah, 00h
+    int 1ah              
+    mov ax, seed
+    add ax, dx
+    add ax, cx
+    inc ax
+    mov seed, ax
+
+    ; AX mod 25 + 1
+    xor dx, dx
+    mov cx, 25
+    div cx                
+    inc dx               
+    mov al, dl
+
+    pop dx
+    pop cx
+    pop bx
+    ret
+GetRandom endp
+
     RET
 GenerateCard ENDP
