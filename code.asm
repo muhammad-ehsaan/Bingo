@@ -1,75 +1,63 @@
-.CODE
+; Macro to print newline
+PNEWLINE macro
+    push ax
+    push dx
+    mov dl, 0dh
+    mov ah, 02h
+    int 21h
+    mov dl, 0ah
+    mov ah, 02h
+    int 21h
+    pop dx
+    pop ax
+endm
 
-PRINT_STR MACRO msg
-    PUSH AX
-    PUSH DX
-    LEA DX, msg
-    MOV AH, 09H
-    INT 21H
-    POP DX
-    POP AX
-ENDM
+; Macro to print single character
+PCHAR macro ch
+    push ax
+    push dx
+    mov dl, ch
+    mov ah, 02h
+    int 21h
+    pop dx
+    pop ax
+endm
 
-NEWLINE MACRO
-    PUSH AX
-    PUSH DX
-    LEA DX, msgNL
-    MOV AH, 09H
-    INT 21H
-    POP DX
-    POP AX
-ENDM
+; PROC: MarkBoth
+; Marks the value in 'num' on both cards
+; Uses loop with CX=25 and SI as index (Lab 8 style)
 
-CallNumber PROC
-    PUSH AX
-    PUSH BX
-    PUSH SI
+MarkBoth proc
+    push ax
+    push cx
+    push si
 
-TRYAGAIN:
-    CALL GetRandom         
-    MOV BX, AX
-    DEC BX                
+    ; Mark on card1
+    mov cx, 25
+    mov si, 0
+MB1:
+    mov al, card1[si]
+    cmp al, num
+    jne MB1Skip
+    mov mark1[si], 1
+MB1Skip:
+    inc si
+    loop MB1
 
-    LEA SI, called
-    CMP BYTE PTR [SI+BX], 1
-    JE  TRYAGAIN           
+    ; Mark on card2
+    mov cx, 25
+    mov si, 0
+MB2:
+    mov al, card2[si]
+    cmp al, num
+    jne MB2Skip
+    mov mark2[si], 1
+MB2Skip:
+    inc si
+    loop MB2
 
-    MOV BYTE PTR [SI+BX], 1
-    INC BX
-    MOV calledNum, BL
-
-    POP SI
-    POP BX
-    POP AX
-    RET
-CallNumber ENDP
-
-MarkCard PROC
-    PUSH AX
-    PUSH BX
-    PUSH CX
-    PUSH SI
-
-    MOV CX, 25
-    MOV BX, 0
-
-MARKLOOP:
-    MOV SI, cardPtr
-    MOV AL, [SI+BX]        ; card[BX]
-
-    CMP AL, calledNum
-    JNE MARKNEXT
-
-    MOV SI, markPtr
-    MOV BYTE PTR [SI+BX], 1  ; marked[BX] = 1
-
-MARKNEXT:
-    INC BX
-    LOOP MARKLOOP
-
-    POP SI
-    POP CX
-    POP BX
-    POP AX
-    RET
-MarkCard ENDP
+    pop si
+    pop cx
+    pop ax
+    ret
+MarkBoth endp
