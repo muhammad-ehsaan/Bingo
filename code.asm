@@ -25,7 +25,7 @@ endm
 
 ; PROC: MarkBoth
 ; Marks the value in 'num' on both cards
-; Uses loop with CX=25 and SI as index (Lab 8 style)
+; Uses loop with CX=25 and SI as index 
 
 MarkBoth proc
     push ax
@@ -61,3 +61,76 @@ MB2Skip:
     pop ax
     ret
 MarkBoth endp
+
+; PROC: ReadNum
+; Reads 1 or 2 digit number from keyboard
+; Returns number in AL (0 if invalid)
+; Uses INT 21h AH=01 
+
+ReadNum proc
+    push bx
+    push cx
+    push dx
+
+    ; Read first char
+    mov ah, 01h
+    int 21h               ; AL = character
+    mov bl, al
+
+    ; Check if Enter
+    cmp bl, 0dh
+    je RDInvalid
+
+    ; Check if digit
+    cmp bl, '0'
+    jb RDInvalid
+    cmp bl, '9'
+    ja RDInvalid
+    sub bl, 48             ; convert ASCII to number 
+
+    ; Read second char
+    mov ah, 01h
+    int 21h
+    mov bh, al
+
+    ; If Enter, single digit
+    cmp bh, 0dh
+    je RD1Dig
+
+    ; Check second digit
+    cmp bh, '0'
+    jb RDInvalid2
+    cmp bh, '9'
+    ja RDInvalid2
+    sub bh, 48
+
+    ; Wait for Enter
+    mov ah, 01h
+    int 21h
+
+    ; Build 2-digit: bl*10 + bh
+    mov al, bl
+    mov cl, 10
+    mul cl                 ; AX = bl * 10
+    add al, bh
+    jmp RDDone
+
+RD1Dig:
+    mov al, bl
+    jmp RDDone
+
+RDInvalid2:
+    ; consume Enter
+    mov ah, 01h
+    int 21h
+RDInvalid:
+    mov al, 0
+
+RDDone:
+    PNEWLINE
+    pop dx
+    pop cx
+    pop bx
+    ret
+ReadNum endp
+
