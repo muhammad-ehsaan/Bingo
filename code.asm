@@ -48,57 +48,6 @@ GetRandom PROC
     RET
 GetRandom ENDP
 
-; ============================================================
-; PROC: GenerateCard
-; ============================================================
-GenerateCard PROC
-    PUSH AX
-    PUSH BX
-    PUSH CX
-    PUSH DX
-    PUSH SI
-
-    MOV SI, cardPtr
-    MOV BX, 0              ; fill index
-
-GENNEXT:
-    CMP BX, 25
-    JGE GENDONE
-
-    CALL GetRandom        
-    MOV DL, AL             
-    PUSH BX
-    MOV CX, BX             
-    MOV BX, 0
-
-    CMP CX, 0
-    JE  UNIQUE
-
-SCANLOOP:
-    CMP [SI+BX], DL
-    JE  DUPLICATE
-    INC BX
-    LOOP SCANLOOP
-    JMP UNIQUE
-
-DUPLICATE:
-    POP BX
-    JMP GENNEXT
-
-UNIQUE:
-    POP BX
-    MOV [SI+BX], DL        ; store number
-    INC BX
-    JMP GENNEXT
-
-GENDONE:
-    POP SI
-    POP DX
-    POP CX
-    POP BX
-    POP AX
-
-
 
 .model small
 .stack 200h
@@ -156,3 +105,94 @@ GetRandom endp
 
     RET
 GenerateCard ENDP
+
+
+
+
+
+; ============================================================
+; PROC: Shuffle
+; ============================================================
+Shuffle proc
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+
+    ; Step 1: Reset pool to 1,2,3...25
+    mov si, 0
+    mov al, 1
+    mov cx, 25
+ResetLP:
+    mov pool[si], al
+    inc si
+    inc al
+    loop ResetLP
+
+    ; Step 2: Fisher-Yates shuffle
+    ; i goes from 24 down to 1
+    mov bx, 24            ; bx = i
+
+ShufLP:
+    cmp bx, 0
+    je ShufDone
+
+    ; Get random 0..bx
+    push bx
+    mov ah, 00h
+    int 1ah
+    mov ax, seed
+    add ax, dx
+    inc ax
+    mov seed, ax
+    pop bx
+
+    push bx
+    xor dx, dx
+    inc bx                ; divisor = i+1
+    div bx
+    dec bx                ; restore bx = i
+    ; DX = random index j (0..i)
+
+    ; Swap pool[bx] and pool[dx]
+    mov si, bx
+    mov al, pool[si]      ; al = pool[i]
+    mov si, dx
+    mov ah, pool[si]      ; ah = pool[j]
+    mov pool[si], al      ; pool[j] = old pool[i]
+    mov si, bx
+    mov pool[si], ah      ; pool[i] = old pool[j]
+
+    pop bx
+    dec bx
+    jmp ShufLP
+
+ShufDone:
+    ; Step 3: Copy pool into card
+    ; SI was pushed at start, pop it to get card pointer
+    pop si                ; SI = card base (passed before call)
+
+    mov cx, 25
+    mov bx, 0
+CopyLP:
+    push si
+    mov si, bx
+    mov al, pool[si]      ; al = pool[bx]
+    pop si
+    ; now write to card: card[bx]
+    ; we use: mov [si+bx], al    but [si+bx] is not valid
+    ; so we add bx to si temporarily
+    push si
+    add si, bx
+    mov [si], al          ; card[bx] = al
+    pop si
+    inc bx
+    loop CopyLP
+
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+Shuffle endp
