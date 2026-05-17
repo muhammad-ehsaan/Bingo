@@ -134,3 +134,118 @@ RDDone:
     ret
 ReadNum endp
 
+; MAIN  
+
+main proc
+    mov ax, @data
+    mov ds, ax
+
+    ; Title
+    printn '============================'
+    printn '   TWO PLAYER BINGO GAME'
+    printn '============================'
+
+    ; Generate Player 1 card
+    lea si, card1
+    call Shuffle
+
+    ; Generate Player 2 card
+    lea si, card2
+    call Shuffle
+
+    ; Show initial cards
+    call DisplayCards
+
+; GAME LOOP  
+
+GameLoop:
+
+    ; Whose turn?
+    cmp turn, 1
+    jne P2Turn
+
+P1Turn:
+    PNEWLINE
+    print 'Player 1, pick a number (1-25): '
+    jmp GetInput
+
+P2Turn:
+    PNEWLINE
+    print 'Player 2, pick a number (1-25): '
+
+GetInput:
+    call ReadNum           ; AL = number
+
+    ; Validate: must be 1-25
+    cmp al, 0
+    je BadInput
+    cmp al, 25
+    ja BadInput
+    jmp GoodInput
+
+BadInput:
+    printn 'Invalid! Enter a number from 1 to 25.'
+    jmp GetInput
+
+GoodInput:
+    mov num, al
+
+    ; Mark on both cards
+    call MarkBoth
+
+    ; Display updated cards
+    call DisplayCards
+
+    ; Check win for both players
+    call CheckWin1
+    call CheckWin2
+
+    ; Both win = draw
+    cmp w1, 1
+    jne ChkP1
+    cmp w2, 1
+    jne ChkP1
+    PNEWLINE
+    printn '****************************'
+    printn '* BINGO! IT IS A DRAW!!!   *'
+    printn '****************************'
+    printn 'The game is over!'
+    jmp GameEnd
+
+ChkP1:
+    cmp w1, 1
+    jne ChkP2
+    PNEWLINE
+    printn '****************************'
+    printn '* BINGO! PLAYER 1 WINS!!!  *'
+    printn '****************************'
+    printn 'Player 1 wins, the game is over!'
+    jmp GameEnd
+
+ChkP2:
+    cmp w2, 1
+    jne SwitchTurn
+    PNEWLINE
+    printn '****************************'
+    printn '* BINGO! PLAYER 2 WINS!!!  *'
+    printn '****************************'
+    printn 'Player 2 wins, the game is over!'
+    jmp GameEnd
+
+SwitchTurn:
+    ; Alternate turn: 1->2, 2->1
+    cmp turn, 1
+    jne SetT1
+    mov turn, 2
+    jmp GameLoop
+SetT1:
+    mov turn, 1
+    jmp GameLoop
+
+GameEnd:
+    mov ah, 4ch
+    int 21h
+
+main endp
+
+end main
