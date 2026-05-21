@@ -1,3 +1,5 @@
+; MACROS  [ Raja Abdulrehman - Member 2 ]
+
 ; Macro to print newline
 PNEWLINE macro
     push ax
@@ -23,9 +25,70 @@ PCHAR macro ch
     pop ax
 endm
 
+; Macro to clear the screen completely
+CLEAR_SCREEN macro
+    push ax
+    push bx
+    push cx
+    push dx
+    mov ah, 06h         ; Scroll up function
+    mov al, 0           ; Clear entire screen
+    mov bh, 07h         ; Normal text attribute (White on black)
+    mov cx, 0000h       ; Top-left corner: (0,0)
+    mov dx, 184Fh       ; Bottom-right corner: (24,79)
+    int 10h
+    
+    ; Reset cursor back to top-left corner
+    mov ah, 02h
+    mov bh, 0
+    mov dh, 0
+    mov dl, 0
+    int 10h
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+endm
+
+; PROC: GetComputerChoice
+; Generates a random number that has NOT been marked on card2 yet
+; (Computer vs Player Engine Part)
+
+GetComputerChoice proc
+    push bx
+    push cx
+    push si
+
+GetCompLP:
+    call GetRandom        ; Returns 1-25 in AL
+    mov bl, al            ; bl = candidate selection number
+
+    ; Search card2 mapping to pinpoint where this value lives
+    mov cx, 25
+    mov si, 0
+FindLP:
+    mov al, card2[si]
+    cmp al, bl
+    je CheckMarked
+    inc si
+    loop FindLP
+    jmp GetCompLP         ; Safety branch fallback
+
+CheckMarked:
+    mov al, mark2[si]     ; Pull mark registry status
+    cmp al, 1
+    je GetCompLP          ; If already marked before, discard choice and reroll!
+    
+    mov al, bl            ; Safe selection found, return inside AL register
+
+    pop si
+    pop cx
+    pop bx
+    ret
+GetComputerChoice endp
+
 ; PROC: MarkBoth
 ; Marks the value in 'num' on both cards
-; Uses loop with CX=25 and SI as index 
 
 MarkBoth proc
     push ax
@@ -64,8 +127,6 @@ MarkBoth endp
 
 ; PROC: ReadNum
 ; Reads 1 or 2 digit number from keyboard
-; Returns number in AL (0 if invalid)
-; Uses INT 21h AH=01 
 
 ReadNum proc
     push bx
@@ -74,7 +135,7 @@ ReadNum proc
 
     ; Read first char
     mov ah, 01h
-    int 21h               ; AL = character
+    int 21h               
     mov bl, al
 
     ; Check if Enter
@@ -86,7 +147,7 @@ ReadNum proc
     jb RDInvalid
     cmp bl, '9'
     ja RDInvalid
-    sub bl, 48             ; convert ASCII to number 
+    sub bl, 48             
 
     ; Read second char
     mov ah, 01h
@@ -111,7 +172,7 @@ ReadNum proc
     ; Build 2-digit: bl*10 + bh
     mov al, bl
     mov cl, 10
-    mul cl                 ; AX = bl * 10
+    mul cl                 
     add al, bh
     jmp RDDone
 
@@ -120,7 +181,6 @@ RD1Dig:
     jmp RDDone
 
 RDInvalid2:
-    ; consume Enter
     mov ah, 01h
     int 21h
 RDInvalid:
@@ -134,33 +194,54 @@ RDDone:
     ret
 ReadNum endp
 
-; MAIN  
+; MAIN METHOD ARCHITECTURE
+; [(Game Loops & Selection Screens)
 
 main proc
     mov ax, @data
     mov ds, ax
 
-    ; Title
+ShowMenu:
+    CLEAR_SCREEN
     printn '============================'
     printn '   TWO PLAYER BINGO GAME'
     printn '============================'
+    printn ' 1. Player 1 vs Player 2'
+    printn ' 2. Player vs Computer'
+    printn '============================'
+    print  ' Enter your choice (1-2): '
 
-    ; Generate Player 1 card
+    mov ah, 01h
+    int 21h
+    cmp al, '1'
+    je SetPvP
+    cmp al, '2'
+    je SetPvC
+    jmp ShowMenu         ; Boundary check fallback jump
+
+SetPvP:
+    mov gameMode, 1
+    jmp StartGame
+
+SetPvC:
+    mov gameMode, 2
+
+StartGame:
+    ; Build structural card sheets
     lea si, card1
     call Shuffle
 
-    ; Generate Player 2 card
     lea si, card2
     call Shuffle
 
-    ; Show initial cards
-    call DisplayCards
-
-; GAME LOOP  
+; EXECUTIVE RUNTIME LOOP 
 
 GameLoop:
 
-    ; Whose turn?
+    ; Display current active screen map
+    call DisplayCards
+
+    ; Jump context branch based on current turn value
     cmp turn, 1
     jne P2Turn
 
@@ -170,13 +251,33 @@ P1Turn:
     jmp GetInput
 
 P2Turn:
+    cmp gameMode, 2
+    je CompTurn
+
     PNEWLINE
     print 'Player 2, pick a number (1-25): '
+    jmp GetInput
+
+CompTurn:
+    PNEWLINE
+    print 'Computer is thinking'
+    PCHAR '.'
+    PCHAR '.'
+    call GetComputerChoice ; Pull machine calculation results
+    
+    ; System clock delay configuration (Int 15h)
+    push ax
+    mov ah, 86h
+    mov cx, 0014h        
+    mov dx, 5000h        
+    int 15h              
+    pop ax
+    jmp GoodInput        
 
 GetInput:
-    call ReadNum           ; AL = number
+    call ReadNum           
 
-    ; Validate: must be 1-25
+    ; Boundary checks
     cmp al, 0
     je BadInput
     cmp al, 25
@@ -185,26 +286,26 @@ GetInput:
 
 BadInput:
     printn 'Invalid! Enter a number from 1 to 25.'
-    jmp GetInput
+    cmp turn, 1
+    je P1Turn
+    jmp P2Turn
 
 GoodInput:
     mov num, al
 
-    ; Mark on both cards
     call MarkBoth
 
-    ; Display updated cards
-    call DisplayCards
-
-    ; Check win for both players
+    ; Call validation audits
     call CheckWin1
     call CheckWin2
 
-    ; Both win = draw
+    ; Draw evaluation check
     cmp w1, 1
     jne ChkP1
     cmp w2, 1
     jne ChkP1
+    
+    call FinalGameDisplay  
     PNEWLINE
     printn '****************************'
     printn '* BINGO! IT IS A DRAW!!!   *'
@@ -215,6 +316,8 @@ GoodInput:
 ChkP1:
     cmp w1, 1
     jne ChkP2
+    
+    call FinalGameDisplay  
     PNEWLINE
     printn '****************************'
     printn '* BINGO! PLAYER 1 WINS!!!  *'
@@ -225,15 +328,24 @@ ChkP1:
 ChkP2:
     cmp w2, 1
     jne SwitchTurn
+    
+    call FinalGameDisplay  
     PNEWLINE
     printn '****************************'
+    
+    cmp gameMode, 2
+    je PrintCompWinMsg
     printn '* BINGO! PLAYER 2 WINS!!!  *'
+    jmp FinishWinMsg
+PrintCompWinMsg:
+    printn '* BINGO! COMPUTER WINS!!!  *'
+FinishWinMsg:
     printn '****************************'
-    printn 'Player 2 wins, the game is over!'
+    printn 'The game is over!'
     jmp GameEnd
 
 SwitchTurn:
-    ; Alternate turn: 1->2, 2->1
+    ; Context state flipper loop
     cmp turn, 1
     jne SetT1
     mov turn, 2
