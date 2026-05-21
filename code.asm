@@ -1,64 +1,12 @@
-.DATA
-    card1    DB 25 DUP(0)
-    card2    DB 25 DUP(0)
-    marked1  DB 25 DUP(0)
-    marked2  DB 25 DUP(0)
-    called   DB 75 DUP(0)
-
-    cardPtr  DW 0
-    markPtr  DW 0
-    calledNum DB 0
-    seed     DW 1
-
-    msgP1     DB "== PLAYER 1 CARD ==",13,10,"$"
-    msgP2     DB "== PLAYER 2 CARD ==",13,10,"$"
-    msgCalled DB 13,10,">>> Called Number: $"
-    msgSep    DB "--------------------",13,10,"$"
-    msgP1Win  DB 13,10,"*** PLAYER 1 WINS - BINGO! ***",13,10,"$"
-    msgP2Win  DB 13,10,"*** PLAYER 2 WINS - BINGO! ***",13,10,"$"
-    msgDraw   DB 13,10,"*** IT IS A DRAW - BINGO! ***",13,10,"$"
-    msgNL     DB 13,10,"$"
-    msgSpc    DB " $"
-
-; PROC: GetRandom
-; Returns a pseudo-random number in AX (1 to 75)
-GetRandom PROC
-    PUSH BX
-    PUSH DX
-
-    ; Mix timer with seed
-    MOV AH, 00H
-    INT 1AH               
-
-    MOV AX, seed
-    ADD AX, DX             ; add timer low word
-    ADD AX, CX             ; add timer high word
-    INC AX                 ; always increment so same-tick calls differ
-    MOV seed, AX           ; save new seed
-
-    ; AX mod 75 + 1
-    XOR DX, DX
-    MOV BX, 75
-    DIV BX                
-    INC DX
-    MOV AX, DX            
-
-    POP DX
-    POP BX
-    RET
-GetRandom ENDP
-
+include emu8086.inc
 
 .model small
 .stack 200h
 
-; ============================================================
-; UPDATED DATA SEGMENT  
-; ============================================================
 .data
 
 card1    db 25 dup(0)       ; Player 1 card 5x5 flat
-card2    db 25 dup(0)       ; Player 2 card 5x5 flat
+card2    db 25 dup(0)       ; Player 2 (or Computer) card 5x5 flat
 mark1    db 25 dup(0)       ; Player 1 marks (0=no 1=yes)
 mark2    db 25 dup(0)       ; Player 2 marks (0=no 1=yes)
 
@@ -73,9 +21,18 @@ turn     db 1              ; 1=P1 turn, 2=P2 turn
 w1       db 0              ; P1 win flag
 w2       db 0              ; P2 win flag
 temp     db 0              ; temp variable
+gameMode db 1              ; 1=P1 vs P2 (Secret Mode), 2=Player vs Computer
 
 ; ============================================================
-; UPDATED  PROC: GetRandom
+; CODE SEGMENT
+; ============================================================
+
+.code
+
+; ============================================================
+; PROC: GetRandom
+; Returns random number 1-25 in AL
+; Uses seed variable + timer
 ; ============================================================
 GetRandom proc
     push bx
@@ -83,7 +40,7 @@ GetRandom proc
     push dx
 
     mov ah, 00h
-    int 1ah              
+    int 1ah              ; CX:DX = timer ticks
     mov ax, seed
     add ax, dx
     add ax, cx
@@ -93,8 +50,8 @@ GetRandom proc
     ; AX mod 25 + 1
     xor dx, dx
     mov cx, 25
-    div cx                
-    inc dx               
+    div cx                ; DX = remainder 0-24
+    inc dx                ; DX = 1-25
     mov al, dl
 
     pop dx
@@ -103,15 +60,10 @@ GetRandom proc
     ret
 GetRandom endp
 
-    RET
-GenerateCard ENDP
-
-
-
-
-
 ; ============================================================
 ; PROC: Shuffle
+; Shuffles pool[] then copies into card at SI
+; Fisher-Yates algorithm using loops
 ; ============================================================
 Shuffle proc
     push ax
@@ -181,8 +133,6 @@ CopyLP:
     mov al, pool[si]      ; al = pool[bx]
     pop si
     ; now write to card: card[bx]
-    ; we use: mov [si+bx], al    but [si+bx] is not valid
-    ; so we add bx to si temporarily
     push si
     add si, bx
     mov [si], al          ; card[bx] = al
@@ -196,105 +146,114 @@ CopyLP:
     pop ax
     ret
 Shuffle endp
-;------------------------------
-; PROC: CheckWin2
-; Returns: w2 = 1 if win
-;------------------------------
 
-CheckWin2 proc
+; ============================================================
+; PROC: DisplayCards
+; Hides/shows card screens based on privacy selection setting
+; (P1 vs P2 with Secrecy System)
+; ============================================================
+DisplayCards proc
     push ax
     push bx
     push cx
+    push dx
     push si
 
-    mov w2, 0
+    CLEAR_SCREEN          ; Clear console frame between turns to maintain secrecy
 
-    ; --- Check 5 rows ---
-    mov si, 0
-    mov bx, 5
-CW2R:
-    mov al, mark2[si]
-    cmp al, 1
-    jne CW2RN
-    mov al, mark2[si+1]
-    cmp al, 1
-    jne CW2RN
-    mov al, mark2[si+2]
-    cmp al, 1
-    jne CW2RN
-    mov al, mark2[si+3]
-    cmp al, 1
-    jne CW2RN
-    mov al, mark2[si+4]
-    cmp al, 1
-    jne CW2RN
-    mov w2, 1
-    jmp CW2Done
-CW2RN:
-    add si, 5
-    dec bx
-    cmp bx, 0
-    jne CW2R
+    ; If Player vs Computer, Player 1 display screen is always unhidden
+    cmp gameMode, 2
+    je D1Start
 
-    ; --- Check 5 columns ---
-    mov si, 0
-    mov bx, 5
-CW2C:
-    mov al, mark2[si]
+    ; If Player vs Player, load UI sheet based entirely on whose active loop turn it is
+    cmp turn, 1
+    je D1Start
+    jmp D2Start
+
+D1Start:
+    ; --- Player 1 Card ---
+    PNEWLINE
+    printn '--- PLAYER 1 ---'
+    printn '----------------'
+
+    mov si, 0             ; si = cell index
+    mov bx, 5             ; bx = outer row tracker
+
+D1Outer:
+    mov cx, 5             ; cx = inner column tracker
+D1Inner:
+    push cx               ; isolate nested counter registers
+
+    ; Check mark array matrix
+    mov al, mark1[si]
     cmp al, 1
-    jne CW2CN
-    mov al, mark2[si+5]
-    cmp al, 1
-    jne CW2CN
-    mov al, mark2[si+10]
-    cmp al, 1
-    jne CW2CN
-    mov al, mark2[si+15]
-    cmp al, 1
-    jne CW2CN
-    mov al, mark2[si+20]
-    cmp al, 1
-    jne CW2CN
-    mov w2, 1
-    jmp CW2Done
-CW2CN:
+    je D1Marked
+
+    ; Print standard numerical configuration
+    mov al, card1[si]
+    call PrintNum
+    jmp D1Next
+
+D1Marked:
+    ; Print masked layout block
+    PCHAR 'X'
+    PCHAR 'X'
+    PCHAR ' '
+
+D1Next:
     inc si
+    pop cx
+    loop D1Inner
+
+    PNEWLINE
     dec bx
     cmp bx, 0
-    jne CW2C
+    jne D1Outer
+    jmp DDone
 
-    ; --- Main diagonal ---
-    cmp mark2[0], 1
-    jne CW2AD
-    cmp mark2[6], 1
-    jne CW2AD
-    cmp mark2[12], 1
-    jne CW2AD
-    cmp mark2[18], 1
-    jne CW2AD
-    cmp mark2[24], 1
-    jne CW2AD
-    mov w2, 1
-    jmp CW2Done
+D2Start:
+    ; --- Player 2 Card ---
+    PNEWLINE
+    printn '--- PLAYER 2 ---'
+    printn '----------------'
 
-CW2AD:
-    ; --- Anti diagonal ---
-    cmp mark2[4], 1
-    jne CW2Done
-    cmp mark2[8], 1
-    jne CW2Done
-    cmp mark2[12], 1
-    jne CW2Done
-    cmp mark2[16], 1
-    jne CW2Done
-    cmp mark2[20], 1
-    jne CW2Done
-    mov w2, 1
+    mov si, 0
+    mov bx, 5
 
-CW2Done:
+D2Outer:
+    mov cx, 5
+D2Inner:
+    push cx
+
+    mov al, mark2[si]
+    cmp al, 1
+    je D2Marked
+
+    mov al, card2[si]
+    call PrintNum
+    jmp D2Next
+
+D2Marked:
+    PCHAR 'X'
+    PCHAR 'X'
+    PCHAR ' '
+
+D2Next:
+    inc si
+    pop cx
+    loop D2Inner
+
+    PNEWLINE
+    dec bx
+    cmp bx, 0
+    jne D2Outer
+
+DDone:
+    PNEWLINE
     pop si
+    pop dx
     pop cx
     pop bx
     pop ax
     ret
-CheckWin2 endp
+DisplayCards endp
