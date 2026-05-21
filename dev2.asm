@@ -1,3 +1,6 @@
+; PROC: PrintNum
+; Prints value in AL as 2-digit number with space
+
 PrintNum proc
     push ax
     push bx
@@ -7,21 +10,18 @@ PrintNum proc
     mov bl, 10
     div bl                ; AL=tens, AH=ones
 
-    ; Print tens digit
     push ax
     mov dl, al
-    add dl, 48            ; convert to ASCII 
+    add dl, 48            
     mov ah, 02h
     int 21h
     pop ax
 
-    ; Print ones digit
     mov dl, ah
     add dl, 48
     mov ah, 02h
     int 21h
 
-    ; Space after number
     PCHAR ' '
 
     pop dx
@@ -30,94 +30,80 @@ PrintNum proc
     ret
 PrintNum endp
 
-; PROC: DisplayCards
-; Shows both 5x5 cards using nested loops
-; Outer loop = rows 
-; Inner loop = columns
+; PROC: FinalGameDisplay
+; Displays BOTH cards completely visible at game end
 
-DisplayCards proc
+FinalGameDisplay proc
     push ax
     push bx
     push cx
     push dx
     push si
 
-    ; --- Player 1 Card ---
+    CLEAR_SCREEN
+    printn '========================================'
+    printn '         FINAL GAME CARD SHEETS         '
+    printn '========================================'
+    
+    ; --- Display Card 1 ---
     PNEWLINE
     printn '--- PLAYER 1 ---'
-    printn '----------------'
-
-    mov si, 0             ; si = cell index
-    mov bx, 5             ; bx = outer loop counter (rows)
-
-D1Outer:
-    mov cx, 5             ; cx = inner loop (columns)
-D1Inner:
-    push cx               ; save inner cx 
-
-    ; Check if marked
-    mov al, mark1[si]
-    cmp al, 1
-    je D1Marked
-
-    ; Not marked: print number
-    mov al, card1[si]
-    call PrintNum
-    jmp D1Next
-
-D1Marked:
-    ; Print "XX " for marked
-    PCHAR 'X'
-    PCHAR 'X'
-    PCHAR ' '
-
-D1Next:
-    inc si
-    pop cx
-    loop D1Inner
-
-    PNEWLINE
-    dec bx
-    cmp bx, 0
-    jne D1Outer
-
-    ; --- Player 2 Card ---
-    PNEWLINE
-    printn '--- PLAYER 2 ---'
-    printn '----------------'
-
     mov si, 0
     mov bx, 5
-
-D2Outer:
+DF1Outer:
     mov cx, 5
-D2Inner:
+DF1Inner:
     push cx
-
-    mov al, mark2[si]
-    cmp al, 1
-    je D2Marked
-
-    mov al, card2[si]
+    cmp mark1[si], 1
+    je DF1Marked
+    mov al, card1[si]
     call PrintNum
-    jmp D2Next
-
-D2Marked:
+    jmp DF1Next
+DF1Marked:
     PCHAR 'X'
     PCHAR 'X'
     PCHAR ' '
-
-D2Next:
+DF1Next:
     inc si
     pop cx
-    loop D2Inner
-
+    loop DF1Inner
     PNEWLINE
     dec bx
     cmp bx, 0
-    jne D2Outer
+    jne DF1Outer
 
+    ; --- Display Card 2 ---
     PNEWLINE
+    cmp gameMode, 2
+    je DFCpuTitle
+    printn '--- PLAYER 2 ---'
+    jmp DF2Start
+DFCpuTitle:
+    printn '--- COMPUTER ---'
+DF2Start:
+    mov si, 0
+    mov bx, 5
+DF2Outer:
+    mov cx, 5
+DF2Inner:
+    push cx
+    cmp mark2[si], 1
+    je DF2Marked
+    mov al, card2[si]
+    call PrintNum
+    jmp DF2Next
+DF2Marked:
+    PCHAR 'X'
+    PCHAR 'X'
+    PCHAR ' '
+DF2Next:
+    inc si
+    pop cx
+    loop DF2Inner
+    PNEWLINE
+    dec bx
+    cmp bx, 0
+    jne DF2Outer
 
     pop si
     pop dx
@@ -125,11 +111,10 @@ D2Next:
     pop bx
     pop ax
     ret
-DisplayCards endp
+FinalGameDisplay endp
 
 ; PROC: CheckWin1
-; Checks mark1 for complete row/col/diagonal
-; Returns: w1 = 1 if win, 0 if not
+; Checks mark1 rows, columns, and diagonals
 
 CheckWin1 proc
     push ax
@@ -140,10 +125,9 @@ CheckWin1 proc
     mov w1, 0
 
     ; --- Check 5 rows ---
-    mov si, 0             ; row start
-    mov bx, 5             ; 5 rows
+    mov si, 0             
+    mov bx, 5             
 CW1R:
-    ; Check 5 cells in row: mark1[si] to mark1[si+4]
     mov al, mark1[si]
     cmp al, 1
     jne CW1RN
@@ -168,10 +152,9 @@ CW1RN:
     jne CW1R
 
     ; --- Check 5 columns ---
-    mov si, 0             ; column start
+    mov si, 0             
     mov bx, 5
 CW1C:
-    ; Column indices: si, si+5, si+10, si+15, si+20
     mov al, mark1[si]
     cmp al, 1
     jne CW1CN
@@ -195,7 +178,7 @@ CW1CN:
     cmp bx, 0
     jne CW1C
 
-    ; Main diagonal: 0,6,12,18,24 
+    ; --- Main diagonal: 0,6,12,18,24 ---
     cmp mark1[0], 1
     jne CW1AD
     cmp mark1[6], 1
@@ -230,3 +213,104 @@ CW1Done:
     pop ax
     ret
 CheckWin1 endp
+
+; PROC: CheckWin2
+; Same logic as CheckWin1 but for Player 2 (mark2)
+
+CheckWin2 proc
+    push ax
+    push bx
+    push cx
+    push si
+
+    mov w2, 0
+
+    ; --- Check 5 rows ---
+    mov si, 0
+    mov bx, 5
+CW2R:
+    mov al, mark2[si]
+    cmp al, 1
+    jne CW2RN
+    mov al, mark2[si+1]
+    cmp al, 1
+    jne CW2RN
+    mov al, mark2[si+2]
+    cmp al, 1
+    jne CW2RN
+    mov al, mark2[si+3]
+    cmp al, 1
+    jne CW2RN
+    mov al, mark2[si+4]
+    cmp al, 1
+    jne CW2RN
+    mov w2, 1
+    jmp CW2Done
+CW2RN:
+    add si, 5
+    dec bx
+    cmp bx, 0
+    jne CW2R
+
+    ; --- Check 5 columns ---
+    mov si, 0
+    mov bx, 5
+CW2C:
+    mov al, mark2[si]
+    cmp al, 1
+    jne CW2CN
+    mov al, mark2[si+5]
+    cmp al, 1
+    jne CW2CN
+    mov al, mark2[si+10]
+    cmp al, 1
+    jne CW2CN
+    mov al, mark2[si+15]
+    cmp al, 1
+    jne CW2CN
+    mov al, mark2[si+20]
+    cmp al, 1
+    jne CW2CN
+    mov w2, 1
+    jmp CW2Done
+CW2CN:
+    inc si
+    dec bx
+    cmp bx, 0
+    jne CW2C
+
+    ; --- Main diagonal ---
+    cmp mark2[0], 1
+    jne CW2AD
+    cmp mark2[6], 1
+    jne CW2AD
+    cmp mark2[12], 1
+    jne CW2AD
+    cmp mark2[18], 1
+    jne CW2AD
+    cmp mark2[24], 1
+    jne CW2AD
+    mov w2, 1
+    jmp CW2Done
+
+CW2AD:
+    ; --- Anti diagonal ---
+    cmp mark2[4], 1
+    jne CW2Done
+    cmp mark2[8], 1
+    jne CW2Done
+    cmp mark2[12], 1
+    jne CW2Done
+    cmp mark2[16], 1
+    jne CW2Done
+    cmp mark2[20], 1
+    jne CW2Done
+    mov w2, 1
+
+CW2Done:
+    pop si
+    pop cx
+    pop bx
+    pop ax
+    ret
+CheckWin2 endp
