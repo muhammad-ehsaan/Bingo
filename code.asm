@@ -3,9 +3,6 @@ include emu8086.inc
 .model small
 .stack 200h
 
-; ============================================================
-; DATA SEGMENT  [ Muhammad Ehsan - Member 1 ]
-; ============================================================
 .data
 
 card1    db 25 dup(0)       ; Player 1 card 5x5 flat
@@ -29,13 +26,13 @@ gameMode db 1              ; 1=P1 vs P2 (Secret Mode), 2=Player vs Computer
 ; ============================================================
 ; CODE SEGMENT
 ; ============================================================
+
 .code
 
 ; ============================================================
 ; PROC: GetRandom
 ; Returns random number 1-25 in AL
 ; Uses seed variable + timer
-; [ Muhammad Ehsan - Member 1 ]
 ; ============================================================
 GetRandom proc
     push bx
@@ -67,7 +64,6 @@ GetRandom endp
 ; PROC: Shuffle
 ; Shuffles pool[] then copies into card at SI
 ; Fisher-Yates algorithm using loops
-; [ Muhammad Ehsan - Member 1 ]
 ; ============================================================
 Shuffle proc
     push ax
@@ -154,7 +150,7 @@ Shuffle endp
 ; ============================================================
 ; PROC: DisplayCards
 ; Hides/shows card screens based on privacy selection setting
-; [ Muhammad Ehsan - Member 1 ] -> (P1 vs P2 with Secrecy System)
+; (P1 vs P2 with Secrecy System)
 ; ============================================================
 DisplayCards proc
     push ax
